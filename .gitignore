@@ -1,2 +1,4 @@
 firebase-adminsdk.json
 .env
+git reset
+node_modules
