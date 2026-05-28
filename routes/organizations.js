@@ -77,6 +77,7 @@ router.get('/:id/events', async (req, res) => {
 
 router.get('/:id/upcoming-events', async (req, res) => {
     try {
+        // Notice we use CURRENT_DATE for PostgreSQL instead of SQLite's DATE('now')
         const query = `
             SELECT * FROM events_tbl 
             WHERE organization_id = $1 
@@ -98,35 +99,6 @@ router.get('/:id/committees', async (req, res) => {
             WHERE organization_id = $1
         `;
         const result = await pool.query(query, [req.params.id]);
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-router.get('/:id/recent-events', async (req, res) => {
-    try {
-        const query = `
-            SELECT * FROM events_tbl 
-            WHERE organization_id = $1 
-            AND date < CURRENT_DATE 
-            AND is_archived = FALSE
-            ORDER BY date DESC, start_time DESC
-        `;
-        const result = await pool.query(query, [req.params.id]);
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-router.get('/:id/committee-schedule/:committee', async (req, res) => {
-    try {
-        const query = `
-            SELECT * FROM schedules_tbl 
-            WHERE committee_id = $1
-        `;
-        const result = await pool.query(query, [req.params.committee]);
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
