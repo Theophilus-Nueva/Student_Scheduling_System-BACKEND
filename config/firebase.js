@@ -9,7 +9,7 @@ let serviceAccount;
 if (process.env.FIREBASE_CREDENTIALS) {
     serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS);
 } else {
-    serviceAccount = JSON.parse(fs.readFileSync('./firebase-adminsdk.json', 'utf8'));
+    serviceAccount = JSON.parse(fs.readFileSync('./FIREBASE_CREDENTIALS.json', 'utf8'));
 }
 
 admin.initializeApp({
