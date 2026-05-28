@@ -1,4 +1,4 @@
-firebase-adminsdk.json
+FIREBASE_CREDENTIALS.json
 .env
 git reset
 node_modules
