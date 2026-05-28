@@ -5,9 +5,6 @@ import { bucket } from '../config/firebase.js';
 
 const router = express.Router();
 
-// ---------------------------------------------------------
-// GET: Single Committee Member
-// ---------------------------------------------------------
 router.get('/:id', async (req, res) => {
     try {
         const result = await pool.query(`SELECT * FROM committees_tbl WHERE id = $1`, [req.params.id]);
@@ -18,9 +15,6 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// ---------------------------------------------------------
-// POST: Add Committee Member (With Firebase Upload)
-// ---------------------------------------------------------
 router.post('/', upload.single('profilePicture'), async (req, res) => {
     const { firstName, lastName, college, program, section, orgId } = req.body;
     let profilePictureUrl = null;
@@ -54,16 +48,12 @@ router.post('/', upload.single('profilePicture'), async (req, res) => {
     }
 });
 
-// ---------------------------------------------------------
-// PUT: Update Committee Member
-// ---------------------------------------------------------
 router.put('/:id', upload.single('profilePicture'), async (req, res) => {
     const { firstName, lastName, college, program, section, orgId } = req.body;
     const id = req.params.id;
     let profilePictureUrl = null;
 
     try {
-        // If they uploaded a NEW picture, send it to Firebase
         if (req.file) {
             const uniqueFilename = `profiles/${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
             const file = bucket.file(uniqueFilename);
@@ -75,7 +65,6 @@ router.put('/:id', upload.single('profilePicture'), async (req, res) => {
             await file.makePublic();
             profilePictureUrl = `https://storage.googleapis.com/${bucket.name}/${uniqueFilename}`;
             
-            // Update everything, including the new Firebase URL
             const query = `
                 UPDATE committees_tbl 
                 SET first_name = $1, last_name = $2, college = $3, program = $4, section = $5, profile_picture = $6, organization_id = $7
@@ -84,7 +73,6 @@ router.put('/:id', upload.single('profilePicture'), async (req, res) => {
             await pool.query(query, [firstName, lastName, college, program, section, profilePictureUrl, orgId, id]);
             
         } else {
-            // If they didn't upload a new picture, update everything EXCEPT the picture
             const query = `
                 UPDATE committees_tbl 
                 SET first_name = $1, last_name = $2, college = $3, program = $4, section = $5, organization_id = $6
@@ -100,9 +88,6 @@ router.put('/:id', upload.single('profilePicture'), async (req, res) => {
     }
 });
 
-// ---------------------------------------------------------
-// DELETE: Remove Committee Member
-// ---------------------------------------------------------
 router.delete('/:id', async (req, res) => {
     try {
         await pool.query(`DELETE FROM committees_tbl WHERE id = $1`, [req.params.id]);

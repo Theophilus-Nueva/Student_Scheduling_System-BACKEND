@@ -1,34 +1,60 @@
 import express from 'express';
-import db from '../config/db.js';
+import pool from '../config/db.js';
 
 const router = express.Router();
 
-// POST: Add Schedule
-router.post('/', (req, res) => {
-    const { startTime, endTime, day, section, subjectTitle, subjectCode, instructor, userId } = req.body;
-    
-    const query = `INSERT INTO schedules_tbl (start_time, end_time, day, section, subject_title, subject_code, instructor, committee_id) VALUES (?,?,?,?,?,?,?,?)`;
-    const params = [startTime, endTime, day, section, subjectTitle, subjectCode, instructor, userId];
+router.post('/', async (req, res) => {
+    const { day, start_time, end_time, subject_code, section, instructor, committee_id } = req.body;
 
-    db.run(query, params, function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: "Schedule added", id: this.lastID });
-    });
+    try {
+        const finalStartTime = start_time || null;
+        const finalEndTime = end_time || null;
+
+        const query = `
+            INSERT INTO schedules_tbl (day, start_time, end_time, subject_code, section, instructor, committee_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id
+        `;
+        const params = [day, finalStartTime, finalEndTime, subject_code, section, instructor, committee_id];
+        
+        const result = await pool.query(query, params);
+        res.json({ message: "Schedule saved successfully!", id: result.rows[0].id });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// PUT: Update Schedule
-router.put('/:id', (req, res) => {
-    const { startTime, endTime, day, section, subjectTitle, subjectCode, instructor, userId } = req.body;
+router.put('/:id', async (req, res) => {
+    const { day, start_time, end_time, subject_code, section, instructor } = req.body;
     const id = req.params.id;
 
-    const query = `UPDATE schedules_tbl SET start_time = ?, end_time = ?, day = ?, section = ?, subject_title = ?, subject_code = ?, instructor = ?, committee_id = ? WHERE id = ?`;
-    const params = [startTime, endTime, day, section, subjectTitle, subjectCode, instructor, userId, id];
+    try {
+        const finalStartTime = start_time || null;
+        const finalEndTime = end_time || null;
 
-    db.run(query, params, function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(404).json({ error: "Schedule entry not found." });
-        res.json({ message: "Schedule updated successfully", changes: this.changes });
-    });
+        const query = `
+            UPDATE schedules_tbl 
+            SET day = $1, start_time = $2, end_time = $3, subject_code = $4, section = $5, instructor = $6
+            WHERE id = $7
+        `;
+        await pool.query(query, [day, finalStartTime, finalEndTime, subject_code, section, instructor, id]);
+        
+        res.json({ message: "Schedule updated successfully!" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.delete('/:id', async (req, res) => {
+    try {
+        await pool.query(`DELETE FROM schedules_tbl WHERE id = $1`, [req.params.id]);
+        res.json({ message: "Schedule deleted successfully!" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 export default router;
