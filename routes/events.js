@@ -3,7 +3,6 @@ import db from '../config/db.js';
 
 const router = express.Router();
 
-// POST: Add Event
 router.post('/', (req, res) => {
     const { title, date, venue, startTime, endTime, description, organizationId } = req.body;
     

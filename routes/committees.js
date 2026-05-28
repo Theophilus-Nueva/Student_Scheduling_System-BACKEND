@@ -4,7 +4,6 @@ import upload from '../middleware/upload.js';
 
 const router = express.Router();
 
-// GET Single Committee Member
 router.get('/:id', (req, res) => {
     db.all(`SELECT * FROM committees_tbl WHERE id = ?`, [req.params.id], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -12,7 +11,6 @@ router.get('/:id', (req, res) => {
     });
 });
 
-// POST: Add Committee Member
 router.post('/', upload.single('profilePicture'), (req, res) => {
     const { firstName, lastName, college, program, section, orgId } = req.body;
     const profilePicture = req.file ? req.file.buffer : null;
@@ -47,7 +45,6 @@ router.put('/:id', upload.single('profilePicture'), (req, res) => {
     });
 });
 
-// DELETE: Remove Committee Member and their Schedules
 router.delete('/:id', (req, res) => {
     const id = req.params.id;
 
