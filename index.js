@@ -11,10 +11,19 @@ import { generateMasterList } from './services/pdfGenerator.js';
 import db from './config/db.js';
 
 const app = express();
-app.use(cors());
+
+const corsOptions = {
+    origin: [
+        'http://localhost:5173', 
+        'https://studentschedulingsystem-frontend-production.up.railway.app' 
+    ], 
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true, 
+};
+
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
-// Mount Routes
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/committees', committeeRoutes);
 app.use('/api/schedules', scheduleRoutes);
@@ -28,5 +37,5 @@ app.post('/api/generate-excuse', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server sailing successfully on port ${PORT} 🏴‍☠️`);
 });
