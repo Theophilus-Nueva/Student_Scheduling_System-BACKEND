@@ -24,11 +24,22 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     const title = req.body.title || req.body.name;
     const date = req.body.date;
-    const start_time = req.body.start_time || req.body.startTime;
-    const end_time = req.body.end_time || req.body.endTime;
     const venue = req.body.venue || req.body.location;
     const description = req.body.description;
-    const organization_id = req.body.organization_id || req.body.orgId;
+    
+    // Catch every possible spelling for the organization ID
+    const organization_id = req.body.organization_id || req.body.orgId || req.body.organizationId;
+
+    // Convert empty time strings from the frontend to true NULLs for PostgreSQL
+    const rawStartTime = req.body.start_time || req.body.startTime;
+    const rawEndTime = req.body.end_time || req.body.endTime;
+    const start_time = rawStartTime || null;
+    const end_time = rawEndTime || null;
+
+    // Sanity Check: Prevent the database from crashing if the end time is before the start time
+    if (start_time && end_time && start_time >= end_time) {
+        return res.status(400).json({ error: "End time must be after the start time!" });
+    }
 
     try {
         const query = `
@@ -48,12 +59,21 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     const title = req.body.title || req.body.name;
     const date = req.body.date;
-    const start_time = req.body.start_time || req.body.startTime;
-    const end_time = req.body.end_time || req.body.endTime;
     const venue = req.body.venue || req.body.location;
     const description = req.body.description;
-    const organization_id = req.body.organization_id || req.body.orgId;
+    const organization_id = req.body.organization_id || req.body.orgId || req.body.organizationId;
     const id = req.params.id;
+
+    // Convert empty time strings from the frontend to true NULLs for PostgreSQL
+    const rawStartTime = req.body.start_time || req.body.startTime;
+    const rawEndTime = req.body.end_time || req.body.endTime;
+    const start_time = rawStartTime || null;
+    const end_time = rawEndTime || null;
+
+    // Sanity Check
+    if (start_time && end_time && start_time >= end_time) {
+        return res.status(400).json({ error: "End time must be after the start time!" });
+    }
 
     try {
         const query = `
