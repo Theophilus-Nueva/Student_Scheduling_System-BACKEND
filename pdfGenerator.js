@@ -44,15 +44,16 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
 
         const startX = 30;
         let currentY = 30;
-        const colWidths = { name: 100, section: 60, subject: 130, time: 90, instructor: 100, signature: 60 };
         
-        const xName = startX;
-        const xSection = xName + colWidths.name;
-        const xSubject = xSection + colWidths.section;
-        const xTime = xSubject + colWidths.subject;
-        const xInstructor = xTime + colWidths.time;
-        const xSignature = xInstructor + colWidths.instructor; 
-        const endX = xSignature + colWidths.signature;
+        // A4 width is ~595. Total drawable width = 595 - 60 (margins) = 535
+        const colW = { time: 100, subject: 90, section: 80, instructor: 160, signature: 105 };
+        
+        const xTime = startX;
+        const xSubject = xTime + colW.time;
+        const xSectionTbl = xSubject + colW.subject;
+        const xInstructor = xSectionTbl + colW.section;
+        const xSignature = xInstructor + colW.instructor; 
+        const endX = xSignature + colW.signature;
 
         doc.font('Helvetica-Bold').fontSize(14).text("MASTER LIST", { align: 'center' });
         doc.fontSize(10).text(`Event: ${event.title} (${event.date} - ${eventDay})`, { align: 'center' });
@@ -62,67 +63,81 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
         const drawStudentTable = (student, schedule) => {
             const rowHeight = 30;
             const subjectCount = schedule.length > 0 ? schedule.length : 1; 
-            const headerHeight = 30;
-            const totalTableHeight = headerHeight + (subjectCount * rowHeight);
+            // Calculate required height for page break logic (Name + Sec + Title + Headers + Data)
+            const requiredHeight = 15 + 20 + 20 + 20 + (subjectCount * rowHeight);
 
-            if (currentY + totalTableHeight > doc.page.height - 50) {
+            if (currentY + requiredHeight > doc.page.height - 50) {
                 doc.addPage();
                 currentY = 30;
             }
 
-            const headerY = currentY;
-            doc.font('Helvetica-Bold').fontSize(9);
-            doc.rect(startX, headerY, endX - startX, headerHeight).stroke();
+            // 1. Draw Student Name and Section Above the Table
+            doc.font('Helvetica-Bold').fontSize(12).text(`${student.first_name} ${student.last_name}`, startX, currentY);
+            currentY += 15;
+            doc.font('Helvetica').fontSize(10).text(student.section || '', startX, currentY);
+            currentY += 20;
+
+            // 2. Draw "CLASS SCHEDULE" Title Header
+            const titleHeight = 20;
+            doc.rect(startX, currentY, endX - startX, titleHeight).fillAndStroke('#eeeeee', 'black');
+            doc.fillColor('black').font('Helvetica-Bold').fontSize(10);
+            doc.text('CLASS SCHEDULE', startX + 5, currentY + 6);
+            currentY += titleHeight;
+
+            // 3. Draw Column Headers
+            const headerHeight = 20;
+            doc.rect(startX, currentY, endX - startX, headerHeight).stroke();
             
-            [xSection, xSubject, xTime, xInstructor, xSignature].forEach(x => {
-                doc.moveTo(x, headerY).lineTo(x, headerY + headerHeight).stroke();
+            // Vertical lines for headers
+            [xSubject, xSectionTbl, xInstructor, xSignature].forEach(x => {
+                doc.moveTo(x, currentY).lineTo(x, currentY + headerHeight).stroke();
             });
 
-            const textY = headerY + 10;
-            doc.text('NAME OF STUDENT', xName + 5, textY, { width: colWidths.name - 10 });
-            doc.text('SECTION', xSection + 5, textY, { width: colWidths.section - 10, align: 'center' });
-            doc.text('AFFECTED SUBJECT', xSubject + 5, textY, { width: colWidths.subject - 10, align: 'center' });
-            doc.text('CLASS SCHEDULE', xTime + 5, textY, { width: colWidths.time - 10, align: 'center' });
-            doc.text('FACULTY MEMBERS', xInstructor + 5, textY, { width: colWidths.instructor - 10, align: 'center' });
-            doc.text('SIGNATURE', xSignature + 5, textY, { width: colWidths.signature - 10, align: 'center' });
+            const textY = currentY + 6;
+            doc.font('Helvetica-Bold').fontSize(9);
+            doc.text('TIME', xTime, textY, { width: colW.time, align: 'center' });
+            doc.text('SUBJECT CODE', xSubject, textY, { width: colW.subject, align: 'center' });
+            doc.text('SECTION', xSectionTbl, textY, { width: colW.section, align: 'center' });
+            doc.text('INSTRUCTOR', xInstructor, textY, { width: colW.instructor, align: 'center' });
+            doc.text('SIGNATURE', xSignature, textY, { width: colW.signature, align: 'center' });
 
             currentY += headerHeight;
 
-            const blockStartY = currentY;
-            const blockHeight = subjectCount * rowHeight;
+            // 4. Draw Data Rows
             doc.font('Helvetica').fontSize(9);
 
-            let subjectY = blockStartY;
             if (schedule.length > 0) {
-                schedule.forEach((item, index) => {
-                    doc.text(item.subject_code || '', xSubject + 5, subjectY + 5, { width: colWidths.subject - 10 });
-                    doc.font('Helvetica-Oblique').fontSize(8)
-                       .text(item.subject_title || '', xSubject + 5, subjectY + 15, { width: colWidths.subject - 10, color: 'gray' });
-                    doc.font('Helvetica').fontSize(9).fillColor('black');
+                schedule.forEach((item) => {
+                    // Row Box
+                    doc.rect(startX, currentY, endX - startX, rowHeight).stroke();
+                    
+                    // Vertical Lines
+                    [xSubject, xSectionTbl, xInstructor, xSignature].forEach(x => {
+                        doc.moveTo(x, currentY).lineTo(x, currentY + rowHeight).stroke();
+                    });
 
-                    doc.text(`${item.start_time} - ${item.end_time}`, xTime + 5, subjectY + 10, { width: colWidths.time - 10, align: 'center' });
-                    doc.text(item.instructor || '', xInstructor + 5, subjectY + 10, { width: colWidths.instructor - 10, align: 'center' });
+                    const itemY = currentY + 10;
+                    
+                    // Time format check (supports standard time or strings like "CLINICAL DUTY")
+                    let timeText = item.start_time ? `${item.start_time} - ${item.end_time}` : (item.time || '');
+                    
+                    doc.text(timeText, xTime, itemY, { width: colW.time, align: 'center' });
+                    doc.text(item.subject_code || '', xSubject, itemY, { width: colW.subject, align: 'center' });
+                    // Default to student.section if schedule doesn't explicitly have its own section
+                    doc.text(item.section || student.section || '', xSectionTbl, itemY, { width: colW.section, align: 'center' });
+                    doc.text(item.instructor || '', xInstructor, itemY, { width: colW.instructor, align: 'center' });
 
-                    if (index < schedule.length - 1) {
-                        const lineY = subjectY + rowHeight;
-                        doc.moveTo(xSubject, lineY).lineTo(endX, lineY).stroke();
-                    }
-                    subjectY += rowHeight;
+                    currentY += rowHeight;
                 });
             } else {
-                doc.text("No classes", xSubject + 5, subjectY + 10);
+                // Empty state if no schedule is found
+                doc.rect(startX, currentY, endX - startX, rowHeight).stroke();
+                doc.text("No classes scheduled", startX, currentY + 10, { width: endX - startX, align: 'center' });
+                currentY += rowHeight;
             }
 
-            const textCenterY = blockStartY + (blockHeight / 2) - 5;
-            doc.text(`${student.last_name}, ${student.first_name}`, xName + 5, blockStartY + 10, { width: colWidths.name - 10 });
-            doc.text(student.section || '', xSection + 5, textCenterY, { width: colWidths.section - 10, align: 'center' });
-
-            doc.rect(startX, blockStartY, endX - startX, blockHeight).stroke();
-            [xSection, xSubject, xTime, xInstructor, xSignature].forEach(x => {
-                doc.moveTo(x, blockStartY).lineTo(x, blockStartY + blockHeight).stroke();
-            });
-
-            currentY += blockHeight + 30; 
+            // Margin at the bottom before the next student starts
+            currentY += 30; 
         };
 
         console.log("Looping through members...");
