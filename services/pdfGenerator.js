@@ -1,28 +1,20 @@
 import PDFDocument from 'pdfkit';
 
-const dbAll = (db, query, params) => {
-    return new Promise((resolve, reject) => {
-        db.all(query, params, (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows);
-        });
-    });
-};
-
 export const generateMasterList = async (res, db, eventId, memberIds) => {
-    console.log("--- STARTING PDF GENERATION (TABLE FORMAT) ---");
+    console.log("--- STARTING PDF GENERATION (POSTGRESQL FORMAT) ---");
 
     try {
         if (!memberIds || memberIds.length === 0) {
             throw new Error("No members selected for generation.");
         }
 
-        const events = await dbAll(db, `SELECT * FROM events_tbl WHERE id = ?`, [eventId]);
+        // 1. Fetch Event (Postgres syntax: $1)
+        const eventResult = await db.query(`SELECT * FROM events_tbl WHERE id = $1`, [eventId]);
         
-        if (!events || events.length === 0) {
+        if (eventResult.rowCount === 0) {
             return res.status(404).json({ error: "Event not found" });
         }
-        const event = events[0];
+        const event = eventResult.rows[0];
         
         const eventDateObj = new Date(event.date);
         const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -37,7 +29,6 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
         const startX = 30;
         let currentY = 30;
 
-        // Column widths for the schedule table
         const columnWidths = [95, 90, 75, 175, 100]; 
         const colStarts = [
             startX, 
@@ -50,8 +41,8 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
         const drawDecorativeHeaderFooter = (yStart, isFooter = false) => {
             const width = doc.page.width - (startX * 2);
             doc.save();
-            doc.rect(startX, yStart, width, 15).fill('#800000'); // Maroon
-            doc.rect(startX, isFooter ? yStart - 5 : yStart + 15, width, 5).fill('#A9A9A9'); // Gray
+            doc.rect(startX, yStart, width, 15).fill('#800000'); 
+            doc.rect(startX, isFooter ? yStart - 5 : yStart + 15, width, 5).fill('#A9A9A9'); 
             doc.restore();
         };
 
@@ -68,7 +59,6 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
             drawDecorativeHeaderFooter(currentY, false);
             currentY += 40;
 
-            // Header: Name and Course
             const studentFullName = `${student.first_name || ''} ${student.last_name || ''}`.trim();
             doc.font('Helvetica-Bold').fontSize(10).fillColor('black');
             doc.text(studentFullName, startX, currentY);
@@ -76,7 +66,6 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
             doc.text(student.section || '', startX, currentY);
             currentY += 20;
 
-            // Main Table Header ("CLASS SCHEDULE", "SECTION", etc.)
             const mainHeaderHeight = rowHeight;
             doc.font('Helvetica').fontSize(9);
             doc.text("CLASS SCHEDULE", colStarts[0], currentY + 10, { width: columnWidths[0] + columnWidths[1], align: 'center' });
@@ -91,7 +80,6 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
             doc.moveTo(colStarts[4], currentY).lineTo(colStarts[4], currentY + mainHeaderHeight * 2).stroke();
             currentY += mainHeaderHeight;
 
-            // Sub-header ("TIME", "SUBJECT CODE")
             const subHeaderHeight = rowHeight;
             doc.text("TIME", colStarts[0], currentY + 10, { width: columnWidths[0], align: 'center' });
             doc.text("SUBJECT CODE", colStarts[1], currentY + 10, { width: columnWidths[1], align: 'center' });
@@ -102,7 +90,6 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
             doc.moveTo(colStarts[4] + columnWidths[4], currentY - mainHeaderHeight).lineTo(colStarts[4] + columnWidths[4], currentY + subHeaderHeight).stroke();
             currentY += subHeaderHeight;
 
-            // Schedule Rows
             if (schedule.length > 0) {
                 schedule.forEach((item, index) => {
                     doc.moveTo(startX, currentY).lineTo(colStarts[4] + columnWidths[4], currentY).stroke(); 
@@ -121,20 +108,17 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
                     doc.text(item.section || student.section || '', colStarts[2], textY, { width: columnWidths[2], align: 'center' });
                     doc.text(item.instructor || '', colStarts[3], textY, { width: columnWidths[3], align: 'center' });
 
-                    // Draw vertical lines
                     [startX, colStarts[1], colStarts[2], colStarts[3], colStarts[4], colStarts[4] + columnWidths[4]].forEach(x => {
                         doc.moveTo(x, rowStart).lineTo(x, rowStart + rowHeight).stroke();
                     });
                     
                     currentY += rowHeight;
 
-                    // Bottom border for the last item
                     if (index === schedule.length - 1) {
                         doc.moveTo(startX, currentY).lineTo(colStarts[4] + columnWidths[4], currentY).stroke();
                     }
                 });
             } else {
-                // Empty fallback row
                 doc.moveTo(startX, currentY).lineTo(colStarts[4] + columnWidths[4], currentY).stroke();
                 doc.text("No classes scheduled", colStarts[0], currentY + 10, { width: columnWidths[0] + columnWidths[1], align: 'center' });
                 
@@ -151,14 +135,17 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
         };
 
         for (const memberId of memberIds) {
-            const members = await dbAll(db, `SELECT * FROM committees_tbl WHERE id = ?`, [memberId]);
-            const member = members[0];
+            // Postgres syntax: db.query and $1
+            const memberResult = await db.query(`SELECT * FROM committees_tbl WHERE id = $1`, [memberId]);
+            const member = memberResult.rows[0];
             
             if (member) {
-                const schedule = await dbAll(db, 
-                    `SELECT * FROM schedules_tbl WHERE committee_id = ? AND day = ? ORDER BY start_time`, 
+                // Postgres syntax: db.query and $1, $2
+                const scheduleResult = await db.query(
+                    `SELECT * FROM schedules_tbl WHERE committee_id = $1 AND day = $2 ORDER BY start_time`, 
                     [memberId, eventDay]
                 );
+                const schedule = scheduleResult.rows;
                 drawStudentEntry(member, schedule);
             }
         }
