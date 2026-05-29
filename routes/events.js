@@ -110,4 +110,14 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+router.put('/:id/restore', async (req, res) => {
+    try {
+        await pool.query(`UPDATE events_tbl SET is_archived = FALSE WHERE id = $1`, [req.params.id]);
+        res.json({ message: "Event restored successfully!" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;

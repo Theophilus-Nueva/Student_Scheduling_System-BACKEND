@@ -133,4 +133,19 @@ router.get('/:id/committee-schedule/:committee', async (req, res) => {
     }
 });
 
+router.get('/:id/archived-events', async (req, res) => {
+    try {
+        const query = `
+            SELECT * FROM events_tbl 
+            WHERE organization_id = $1 
+            AND is_archived = TRUE 
+            ORDER BY date DESC
+        `;
+        const result = await pool.query(query, [req.params.id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;
