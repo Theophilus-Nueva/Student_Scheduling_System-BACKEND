@@ -1,14 +1,14 @@
 import PDFDocument from 'pdfkit';
 
 export const generateMasterList = async (res, db, eventId, memberIds) => {
-    console.log("--- STARTING PDF GENERATION (POSTGRESQL FORMAT) ---");
+    console.log("--- STARTING PDF GENERATION (NO BANNERS) ---");
 
     try {
         if (!memberIds || memberIds.length === 0) {
             throw new Error("No members selected for generation.");
         }
 
-        // 1. Fetch Event (Postgres syntax: $1)
+        // Fetch Event
         const eventResult = await db.query(`SELECT * FROM events_tbl WHERE id = $1`, [eventId]);
         
         if (eventResult.rowCount === 0) {
@@ -38,36 +38,28 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
             startX + columnWidths[0] + columnWidths[1] + columnWidths[2] + columnWidths[3]
         ];
 
-        const drawDecorativeHeaderFooter = (yStart, isFooter = false) => {
-            const width = doc.page.width - (startX * 2);
-            doc.save();
-            doc.rect(startX, yStart, width, 15).fill('#800000'); 
-            doc.rect(startX, isFooter ? yStart - 5 : yStart + 15, width, 5).fill('#A9A9A9'); 
-            doc.restore();
-        };
-
         const drawStudentEntry = (student, schedule) => {
             const rowHeight = 30;
             const tableItems = schedule.length > 0 ? schedule.length : 1;
-            const totalRequiredHeight = 20 + 50 + 60 + (tableItems * rowHeight) + 40; 
+            // Recalculated height needed for the block without banners
+            const totalRequiredHeight = 50 + 60 + (tableItems * rowHeight) + 40; 
 
             if (currentY + totalRequiredHeight > doc.page.height - 30) {
                 doc.addPage();
                 currentY = 30;
             }
 
-            drawDecorativeHeaderFooter(currentY, false);
-            currentY += 40;
-
+            // Student Information
             const studentFullName = `${student.first_name || ''} ${student.last_name || ''}`.trim();
             doc.font('Helvetica-Bold').fontSize(10).fillColor('black');
             doc.text(studentFullName, startX, currentY);
             currentY += 15;
-            doc.text(student.section || '', startX, currentY);
+            doc.font('Helvetica').text(student.section || '', startX, currentY);
             currentY += 20;
 
+            // Main Header
             const mainHeaderHeight = rowHeight;
-            doc.font('Helvetica').fontSize(9);
+            doc.fontSize(9);
             doc.text("CLASS SCHEDULE", colStarts[0], currentY + 10, { width: columnWidths[0] + columnWidths[1], align: 'center' });
             doc.text("SECTION", colStarts[2], currentY + 10, { width: columnWidths[2], align: 'center' });
             doc.text("INSTRUCTOR", colStarts[3], currentY + 10, { width: columnWidths[3], align: 'center' });
@@ -80,6 +72,7 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
             doc.moveTo(colStarts[4], currentY).lineTo(colStarts[4], currentY + mainHeaderHeight * 2).stroke();
             currentY += mainHeaderHeight;
 
+            // Sub Header
             const subHeaderHeight = rowHeight;
             doc.text("TIME", colStarts[0], currentY + 10, { width: columnWidths[0], align: 'center' });
             doc.text("SUBJECT CODE", colStarts[1], currentY + 10, { width: columnWidths[1], align: 'center' });
@@ -90,6 +83,7 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
             doc.moveTo(colStarts[4] + columnWidths[4], currentY - mainHeaderHeight).lineTo(colStarts[4] + columnWidths[4], currentY + subHeaderHeight).stroke();
             currentY += subHeaderHeight;
 
+            // Schedule Data Rows
             if (schedule.length > 0) {
                 schedule.forEach((item, index) => {
                     doc.moveTo(startX, currentY).lineTo(colStarts[4] + columnWidths[4], currentY).stroke(); 
@@ -114,11 +108,13 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
                     
                     currentY += rowHeight;
 
+                    // Close the bottom of the table on the last item
                     if (index === schedule.length - 1) {
                         doc.moveTo(startX, currentY).lineTo(colStarts[4] + columnWidths[4], currentY).stroke();
                     }
                 });
             } else {
+                // Empty Fallback
                 doc.moveTo(startX, currentY).lineTo(colStarts[4] + columnWidths[4], currentY).stroke();
                 doc.text("No classes scheduled", colStarts[0], currentY + 10, { width: columnWidths[0] + columnWidths[1], align: 'center' });
                 
@@ -129,18 +125,15 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
                 doc.moveTo(startX, currentY).lineTo(colStarts[4] + columnWidths[4], currentY).stroke();
             }
 
-            currentY += 20;
-            drawDecorativeHeaderFooter(currentY, true);
+            // Margin before next student
             currentY += 50; 
         };
 
         for (const memberId of memberIds) {
-            // Postgres syntax: db.query and $1
             const memberResult = await db.query(`SELECT * FROM committees_tbl WHERE id = $1`, [memberId]);
             const member = memberResult.rows[0];
             
             if (member) {
-                // Postgres syntax: db.query and $1, $2
                 const scheduleResult = await db.query(
                     `SELECT * FROM schedules_tbl WHERE committee_id = $1 AND day = $2 ORDER BY start_time`, 
                     [memberId, eventDay]
