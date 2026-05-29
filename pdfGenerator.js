@@ -26,8 +26,7 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
             return res.status(404).json({ error: "Event not found" });
         }
         const event = events[0];
-        console.log("Event Found:", event.title);
-
+        
         const eventDateObj = new Date(event.date);
         if (isNaN(eventDateObj.getTime())) {
             throw new Error(`Invalid event date format: ${event.date}`);
@@ -44,113 +43,148 @@ export const generateMasterList = async (res, db, eventId, memberIds) => {
 
         const startX = 30;
         let currentY = 30;
-        
-        // A4 width is ~595. Total drawable width = 595 - 60 (margins) = 535
-        const colW = { time: 100, subject: 90, section: 80, instructor: 160, signature: 105 };
-        
-        const xTime = startX;
-        const xSubject = xTime + colW.time;
-        const xSectionTbl = xSubject + colW.subject;
-        const xInstructor = xSectionTbl + colW.section;
-        const xSignature = xInstructor + colW.instructor; 
-        const endX = xSignature + colW.signature;
 
-        doc.font('Helvetica-Bold').fontSize(14).text("MASTER LIST", { align: 'center' });
-        doc.fontSize(10).text(`Event: ${event.title} (${event.date} - ${eventDay})`, { align: 'center' });
-        doc.moveDown(2);
-        currentY = doc.y;
+        // A4 Width is ~595. Usable width with 30px margins = 535
+        const columnWidths = [95, 90, 75, 175, 100]; 
+        const colStarts = [
+            startX, 
+            startX + columnWidths[0], 
+            startX + columnWidths[0] + columnWidths[1], 
+            startX + columnWidths[0] + columnWidths[1] + columnWidths[2], 
+            startX + columnWidths[0] + columnWidths[1] + columnWidths[2] + columnWidths[3]
+        ];
 
-        const drawStudentTable = (student, schedule) => {
+        const drawDecorativeHeaderFooter = (yStart, isFooter = false) => {
+            const width = doc.page.width - (startX * 2);
+            doc.save();
+            // Maroon and gray header/footer bands
+            doc.rect(startX, yStart, width, 15).fill('#8B0000'); 
+            doc.rect(startX, isFooter ? yStart - 5 : yStart + 15, width, 5).fill('#A9A9A9'); 
+            doc.restore();
+        };
+
+        const drawStudentEntry = (student, schedule) => {
             const rowHeight = 30;
-            const subjectCount = schedule.length > 0 ? schedule.length : 1; 
-            // Calculate required height for page break logic (Name + Sec + Title + Headers + Data)
-            const requiredHeight = 15 + 20 + 20 + 20 + (subjectCount * rowHeight);
+            const tableItems = schedule.length > 0 ? schedule.length : 1;
+            const totalRequiredHeight = 20 + 50 + 60 + (tableItems * rowHeight) + 40; // Approx height needed for one whole block
 
-            if (currentY + requiredHeight > doc.page.height - 50) {
+            if (currentY + totalRequiredHeight > doc.page.height - 30) {
                 doc.addPage();
                 currentY = 30;
             }
 
-            // 1. Draw Student Name and Section Above the Table
-            doc.font('Helvetica-Bold').fontSize(12).text(`${student.first_name} ${student.last_name}`, startX, currentY);
+            // Draw Top Border
+            drawDecorativeHeaderFooter(currentY, false);
+            currentY += 40;
+
+            // Student Information (Dynamically populated)
+            const studentFullName = `${student.first_name || ''} ${student.last_name || ''}`.trim();
+            doc.font('Helvetica-Bold').fontSize(10).fillColor('black');
+            doc.text(studentFullName, startX, currentY);
             currentY += 15;
-            doc.font('Helvetica').fontSize(10).text(student.section || '', startX, currentY);
+            doc.text(student.section || '', startX, currentY);
             currentY += 20;
 
-            // 2. Draw "CLASS SCHEDULE" Title Header
-            const titleHeight = 20;
-            doc.rect(startX, currentY, endX - startX, titleHeight).fillAndStroke('#eeeeee', 'black');
-            doc.fillColor('black').font('Helvetica-Bold').fontSize(10);
-            doc.text('CLASS SCHEDULE', startX + 5, currentY + 6);
-            currentY += titleHeight;
-
-            // 3. Draw Column Headers
-            const headerHeight = 20;
-            doc.rect(startX, currentY, endX - startX, headerHeight).stroke();
+            // --- Draw Table Header ---
+            const mainHeaderHeight = rowHeight;
             
-            // Vertical lines for headers
-            [xSubject, xSectionTbl, xInstructor, xSignature].forEach(x => {
-                doc.moveTo(x, currentY).lineTo(x, currentY + headerHeight).stroke();
-            });
-
-            const textY = currentY + 6;
-            doc.font('Helvetica-Bold').fontSize(9);
-            doc.text('TIME', xTime, textY, { width: colW.time, align: 'center' });
-            doc.text('SUBJECT CODE', xSubject, textY, { width: colW.subject, align: 'center' });
-            doc.text('SECTION', xSectionTbl, textY, { width: colW.section, align: 'center' });
-            doc.text('INSTRUCTOR', xInstructor, textY, { width: colW.instructor, align: 'center' });
-            doc.text('SIGNATURE', xSignature, textY, { width: colW.signature, align: 'center' });
-
-            currentY += headerHeight;
-
-            // 4. Draw Data Rows
+            // "CLASS SCHEDULE" merged header
             doc.font('Helvetica').fontSize(9);
+            doc.text("CLASS SCHEDULE", colStarts[0], currentY + 10, { width: columnWidths[0] + columnWidths[1], align: 'center' });
+            doc.text("SECTION", colStarts[2], currentY + 10, { width: columnWidths[2], align: 'center' });
+            doc.text("INSTRUCTOR", colStarts[3], currentY + 10, { width: columnWidths[3], align: 'center' });
+            doc.text("SIGNATURE", colStarts[4], currentY + 10, { width: columnWidths[4], align: 'center' });
+            doc.lineWidth(1).stroke('black');
 
+            // Header Outlines
+            doc.moveTo(colStarts[0], currentY).lineTo(colStarts[4] + columnWidths[4], currentY).stroke();
+            doc.moveTo(colStarts[2], currentY).lineTo(colStarts[2], currentY + mainHeaderHeight * 2).stroke();
+            doc.moveTo(colStarts[3], currentY).lineTo(colStarts[3], currentY + mainHeaderHeight * 2).stroke();
+            doc.moveTo(colStarts[4], currentY).lineTo(colStarts[4], currentY + mainHeaderHeight * 2).stroke();
+            currentY += mainHeaderHeight;
+
+            // Sub-headers ("TIME" and "SUBJECT CODE")
+            const subHeaderHeight = rowHeight;
+            doc.text("TIME", colStarts[0], currentY + 10, { width: columnWidths[0], align: 'center' });
+            doc.text("SUBJECT CODE", colStarts[1], currentY + 10, { width: columnWidths[1], align: 'center' });
+            
+            // Sub-header Outlines
+            doc.moveTo(colStarts[0], currentY).lineTo(colStarts[2], currentY).stroke(); // Line splitting Class Schedule
+            doc.moveTo(colStarts[1], currentY).lineTo(colStarts[1], currentY + subHeaderHeight).stroke();
+            
+            // Outer table borders for headers
+            doc.moveTo(startX, currentY - mainHeaderHeight).lineTo(startX, currentY + subHeaderHeight).stroke();
+            doc.moveTo(colStarts[4] + columnWidths[4], currentY - mainHeaderHeight).lineTo(colStarts[4] + columnWidths[4], currentY + subHeaderHeight).stroke();
+            currentY += subHeaderHeight;
+
+            // --- Draw Data Rows ---
             if (schedule.length > 0) {
-                schedule.forEach((item) => {
-                    // Row Box
-                    doc.rect(startX, currentY, endX - startX, rowHeight).stroke();
-                    
-                    // Vertical Lines
-                    [xSubject, xSectionTbl, xInstructor, xSignature].forEach(x => {
-                        doc.moveTo(x, currentY).lineTo(x, currentY + rowHeight).stroke();
-                    });
+                schedule.forEach((item, index) => {
+                    doc.moveTo(startX, currentY).lineTo(colStarts[4] + columnWidths[4], currentY).stroke(); // Top line of row
+                    const rowStart = currentY;
 
-                    const itemY = currentY + 10;
-                    
-                    // Time format check (supports standard time or strings like "CLINICAL DUTY")
-                    let timeText = item.start_time ? `${item.start_time} - ${item.end_time}` : (item.time || '');
-                    
-                    doc.text(timeText, xTime, itemY, { width: colW.time, align: 'center' });
-                    doc.text(item.subject_code || '', xSubject, itemY, { width: colW.subject, align: 'center' });
-                    // Default to student.section if schedule doesn't explicitly have its own section
-                    doc.text(item.section || student.section || '', xSectionTbl, itemY, { width: colW.section, align: 'center' });
-                    doc.text(item.instructor || '', xInstructor, itemY, { width: colW.instructor, align: 'center' });
+                    // Logic to handle empty times (e.g., Clinical Duty) vs formatted times
+                    let timeText = "-";
+                    if (item.start_time && item.end_time) {
+                        timeText = `${item.start_time} - ${item.end_time}`;
+                    } else if (item.start_time) {
+                        timeText = item.start_time;
+                    }
 
+                    // Centered Text Placement
+                    const textY = currentY + 10;
+                    doc.text(timeText, colStarts[0], textY, { width: columnWidths[0], align: 'center' });
+                    doc.text(item.subject_code || '', colStarts[1], textY, { width: columnWidths[1], align: 'center' });
+                    doc.text(item.section || student.section || '', colStarts[2], textY, { width: columnWidths[2], align: 'center' });
+                    doc.text(item.instructor || '', colStarts[3], textY, { width: columnWidths[3], align: 'center' });
+
+                    // Vertical lines for the row
+                    doc.moveTo(startX, rowStart).lineTo(startX, rowStart + rowHeight).stroke();
+                    doc.moveTo(colStarts[1], rowStart).lineTo(colStarts[1], rowStart + rowHeight).stroke();
+                    doc.moveTo(colStarts[2], rowStart).lineTo(colStarts[2], rowStart + rowHeight).stroke();
+                    doc.moveTo(colStarts[3], rowStart).lineTo(colStarts[3], rowStart + rowHeight).stroke();
+                    doc.moveTo(colStarts[4], rowStart).lineTo(colStarts[4], rowStart + rowHeight).stroke();
+                    doc.moveTo(colStarts[4] + columnWidths[4], rowStart).lineTo(colStarts[4] + columnWidths[4], rowStart + rowHeight).stroke();
+                    
                     currentY += rowHeight;
+
+                    // Close the bottom of the table on the last item
+                    if (index === schedule.length - 1) {
+                        doc.moveTo(startX, currentY).lineTo(colStarts[4] + columnWidths[4], currentY).stroke();
+                    }
                 });
             } else {
-                // Empty state if no schedule is found
-                doc.rect(startX, currentY, endX - startX, rowHeight).stroke();
-                doc.text("No classes scheduled", startX, currentY + 10, { width: endX - startX, align: 'center' });
+                // Fallback for an empty schedule so the table isn't broken
+                doc.moveTo(startX, currentY).lineTo(colStarts[4] + columnWidths[4], currentY).stroke();
+                doc.text("No classes scheduled", colStarts[0], currentY + 10, { width: columnWidths[0] + columnWidths[1], align: 'center' });
+                
+                // Draw vertical lines for empty row
+                [startX, colStarts[2], colStarts[3], colStarts[4], colStarts[4] + columnWidths[4]].forEach(x => {
+                    doc.moveTo(x, currentY).lineTo(x, currentY + rowHeight).stroke();
+                });
                 currentY += rowHeight;
+                doc.moveTo(startX, currentY).lineTo(colStarts[4] + columnWidths[4], currentY).stroke();
             }
 
-            // Margin at the bottom before the next student starts
-            currentY += 30; 
+            // Draw Bottom Border
+            currentY += 20;
+            drawDecorativeHeaderFooter(currentY, true);
+            currentY += 50; // Margin before next student
         };
 
         console.log("Looping through members...");
         for (const memberId of memberIds) {
+            // Dynamically fetch student data
             const members = await dbAll(db, `SELECT * FROM committees_tbl WHERE id = ?`, [memberId]);
             const member = members[0];
             
             if (member) {
+                // Dynamically fetch their schedule for the day
                 const schedule = await dbAll(db, 
                     `SELECT * FROM schedules_tbl WHERE committee_id = ? AND day = ? ORDER BY start_time`, 
                     [memberId, eventDay]
                 );
-                drawStudentTable(member, schedule);
+                drawStudentEntry(member, schedule);
             }
         }
 
