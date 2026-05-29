@@ -21,6 +21,16 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+router.delete('/:id', async (req, res) => {
+    try {
+        await pool.query(`UPDATE events_tbl SET is_archived = TRUE WHERE id = $1`, [req.params.id]);
+        res.json({ message: "Event archived successfully!" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.post('/', async (req, res) => {
     const title = req.body.title || req.body.name;
     const date = req.body.date;
